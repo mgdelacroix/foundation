@@ -72,14 +72,10 @@ func (f *Foundation) calculateNextStep(step int) int {
 	}
 
 	i := f.currentStep
-	for {
+	for i < step {
 		i++
 
 		if _, ok := f.interceptors[i]; ok {
-			break
-		}
-
-		if step == i {
 			break
 		}
 	}
