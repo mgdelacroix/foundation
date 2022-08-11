@@ -1,4 +1,4 @@
-module git.ctrlz.es/mgdelacroix/foundation
+module github.com/mgdelacroix/foundation
 
 go 1.18
 

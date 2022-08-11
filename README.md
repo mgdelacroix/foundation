@@ -1,11 +1,11 @@
 # Foundation
 
-A set of helpers to help to create and manage database migration tests.
+A framework to write simple database migration tests.
 
 ## Install
 
 ```
-go get git.ctrlz.es/mgdelacroix/foundation
+go get github.com/mgdelacroix/foundation
 ```
 
 ## Usage
