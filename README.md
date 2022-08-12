@@ -21,6 +21,7 @@ type Migrator interface {
 	DriverName() string
 	Setup() error
 	MigrateToStep(step int) error
+	Interceptors() map[int]Interceptor
 	TearDown() error
 }
 
@@ -39,7 +40,6 @@ your assertions:
 ```go
 t.Run("migration should link book 1 with its author", func(t *testing.T) {
 	f := foundation.New(t, migrator).
-		RegisterInterceptors(interceptors).
 		// runs migrations up to and including 5
 		MigrateToStep(5).
 		// loads the SQL of the file
@@ -48,14 +48,21 @@ t.Run("migration should link book 1 with its author", func(t *testing.T) {
 		MigrateToStep(6)
 	defer f.TearDown()
 
-	book := struct{
-		ID int
-		AuthorID int
-	}{}
+	book := struct{ID int; AuthorID int}{}
 
-	err = f.DB().Get(&book, "SELECT id, authorID FROM books")
+	err := f.DB().Get(&book, "SELECT id, authorID FROM books")
 	require.NoError(t, err)
 	require.Equal(t, 1, book.ID)
 	require.Equal(t, 3, book.AuthorID)
+})
+
+t.Run("test specifically the interceptor 6", func(t *testing.T) {
+	f := foundation.New(t, migrator).
+		MigrateToStepSkippingLastInterceptor(6).
+		ExecFile("./myfixtures.sql").
+		RunInterceptor(6)
+	defer f.TearDown()
+
+	// ...
 })
 ```
