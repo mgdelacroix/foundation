@@ -22,6 +22,7 @@ type Migrator interface {
 	DriverName() string
 	Setup() error
 	MigrateToStep(step int) error
+	Interceptors() map[int]Interceptor
 	TearDown() error
 }
 
@@ -40,12 +41,15 @@ func New(t *testing.T, migrator Migrator) *Foundation {
 		currentStep: 0,
 		// if true, will run the migrator Step function once per step
 		// instead of just once with the final step
-		stepByStep: false,
-		migrator:   migrator,
-		db:         db,
+		stepByStep:   false,
+		migrator:     migrator,
+		interceptors: migrator.Interceptors(),
+		db:           db,
 	}
 }
 
+// RegisterInterceptors replaced the migrator interceptors with new
+// ones, in case we want to check a special case for a given test
 func (f *Foundation) RegisterInterceptors(interceptors map[int]Interceptor) *Foundation {
 	f.interceptors = interceptors
 	return f
@@ -83,7 +87,7 @@ func (f *Foundation) calculateNextStep(step int) int {
 	return i
 }
 
-func (f *Foundation) MigrateToStep(step int) *Foundation {
+func (f *Foundation) migrateToStep(step int, skipLastInterceptor bool) *Foundation {
 	if step == f.currentStep {
 		// log nothing to do
 		return f
@@ -95,7 +99,7 @@ func (f *Foundation) MigrateToStep(step int) *Foundation {
 
 	// if there are no interceptors, just migrate to the last step
 	if f.interceptors == nil {
-		if err := f.migrateToStep(step); err != nil {
+		if err := f.doMigrateToStep(step); err != nil {
 			f.t.Fatalf("migration to step %d failed: %s", step, err)
 		}
 
@@ -105,14 +109,20 @@ func (f *Foundation) MigrateToStep(step int) *Foundation {
 	for f.currentStep < step {
 		nextStep := f.calculateNextStep(step)
 
-		if err := f.migrateToStep(nextStep); err != nil {
+		if err := f.doMigrateToStep(nextStep); err != nil {
 			f.t.Fatalf("migration to step %d failed: %s", nextStep, err)
+		}
+
+		// if we want to skip the last interceptor and we're in the
+		// last step, just continue
+		if skipLastInterceptor && nextStep == step {
+			continue
 		}
 
 		interceptorFn, ok := f.interceptors[nextStep]
 		if ok {
 			if err := interceptorFn(); err != nil {
-				f.t.Fatalf("interceptor function for step %d failed", nextStep)
+				f.t.Fatalf("interceptor function for step %d failed: %s", nextStep, err)
 			}
 		}
 	}
@@ -120,11 +130,42 @@ func (f *Foundation) MigrateToStep(step int) *Foundation {
 	return f
 }
 
-// migrateToStep executes the migrator function to migrate to a
+// MigrateToStep instructs the migrator to move forward until step is
+// reached. While migrating, it will run the interceptors after the
+// step they're defined for
+func (f *Foundation) MigrateToStep(step int) *Foundation {
+	return f.migrateToStep(step, false)
+}
+
+// MigrateToStepSkippingLastInterceptor instructs the migrator to move
+// forward until step is reached, skipping the last interceptor. This
+// is useful if we want to load fixtures on the last step but before
+// running the interceptor code, so we can check how that data is
+// modified by the interceptor
+func (f *Foundation) MigrateToStepSkippingLastInterceptor(step int) *Foundation {
+	return f.migrateToStep(step, true)
+}
+
+// RunInterceptor executes the code of the interceptor corresponding
+// to step
+func (f *Foundation) RunInterceptor(step int) *Foundation {
+	interceptorFn, ok := f.interceptors[step]
+	if !ok {
+		f.t.Fatalf("no interceptor found for step %d", step)
+	}
+
+	if err := interceptorFn(); err != nil {
+		f.t.Fatalf("interceptor function for step %d failed: %s", step, err)
+	}
+
+	return f
+}
+
+// doMigrateToStep executes the migrator function to migrate to a
 // specific step and updates the foundation currentStep to reflect the
 // result. This function doesn't take into account interceptors, that
 // happens on MigrateToStep
-func (f *Foundation) migrateToStep(step int) error {
+func (f *Foundation) doMigrateToStep(step int) error {
 	if f.stepByStep {
 		for f.currentStep < step {
 			if err := f.migrator.MigrateToStep(f.currentStep + 1); err != nil {
