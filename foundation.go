@@ -14,7 +14,7 @@ type Foundation struct {
 	stepByStep   bool
 	migrator     Migrator
 	db           *sqlx.DB
-	interceptors map[int]Interceptor
+	interceptors map[int]func error
 }
 
 type Migrator interface {
@@ -22,11 +22,9 @@ type Migrator interface {
 	DriverName() string
 	Setup() error
 	MigrateToStep(step int) error
-	Interceptors() map[int]Interceptor
+	Interceptors() map[int]func() error
 	TearDown() error
 }
-
-type Interceptor func() error
 
 // ToDo: change T to TB?
 func New(t *testing.T, migrator Migrator) *Foundation {
@@ -50,7 +48,7 @@ func New(t *testing.T, migrator Migrator) *Foundation {
 
 // RegisterInterceptors replaced the migrator interceptors with new
 // ones, in case we want to check a special case for a given test
-func (f *Foundation) RegisterInterceptors(interceptors map[int]Interceptor) *Foundation {
+func (f *Foundation) RegisterInterceptors(interceptors map[int]func() error) *Foundation {
 	f.interceptors = interceptors
 	return f
 }
