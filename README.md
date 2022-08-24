@@ -21,11 +21,11 @@ type Migrator interface {
 	DriverName() string
 	Setup() error
 	MigrateToStep(step int) error
-	Interceptors() map[int]Interceptor
+	Interceptors() map[int]func() error
 	TearDown() error
 }
 
-interceptors := map[int]Interceptor{
+interceptors := map[int]func() error{
     // function that will run after step 6
     6: func() err {
         return myStore.RunDataMigration()
