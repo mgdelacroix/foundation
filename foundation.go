@@ -14,7 +14,7 @@ type Foundation struct {
 	stepByStep   bool
 	migrator     Migrator
 	db           *sqlx.DB
-	interceptors map[int]func error
+	interceptors map[int]func() error
 }
 
 type Migrator interface {
